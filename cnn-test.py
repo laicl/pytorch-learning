@@ -11,6 +11,7 @@ from torch.autograd import Variable
 import numpy as np
 import visdom
 import time
+import pickle
 #from Swish_activation import Swish_act
 
 # Training settings
@@ -58,6 +59,12 @@ test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.test_batc
 
 def Norm_op(num):
     return nn.BatchNorm2d(num)
+
+'''
+def Act_op():
+    return nn.ReLU()
+    #return nn.Tanh()
+'''
 
 ## 由于 Function 可能需要暂存 input tensor。
 ## 因此，建议不复用 Function 对象，以避免遇到内存提前释放的问题。
@@ -129,6 +136,7 @@ while not vis.check_connection() and startup_sec > 0:
     startup_sec -= 0.1
 assert vis.check_connection(), 'No connection could be formed quickly'
 
+train_loss = []
 line = vis.line(Y=np.array([0]),win="train_vgg_"+args.wn)
 def train(epoch):
     cur_train_len = (epoch-1)*len(train_loader)
@@ -143,6 +151,7 @@ def train(epoch):
         loss = loss_f(output, target)
         loss.backward()
         optimizer.step()
+        train_loss.append(loss.data[0])
         if (batch_idx*args.batch_size) % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
@@ -163,7 +172,7 @@ def test():
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data, volatile=True), Variable(target)
         output = model(data)
-        test_loss += loss_f(output, target, size_average=False).data[0] # sum up batch loss
+        test_loss += loss_f(output, target).data[0] # sum up batch loss
         pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
         correct += pred.eq(target.data.view_as(pred)).long().cpu().sum()
 
@@ -176,3 +185,8 @@ def test():
 for epoch in range(1, args.epochs + 1):
     train(epoch)
     test()
+
+#保存loss值，在其他函数中，把不同过程的loss值画在一个图里
+train_loss_file_name = 'train_loss_'+args.wn+'.txt'
+with open(train_loss_file_name, 'wb') as f:
+    pickle.dump(train_loss,f)
