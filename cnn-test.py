@@ -12,7 +12,8 @@ import numpy as np
 import visdom
 import time
 import pickle
-#from Swish_activation import Swish_act
+from Swish_activation import Swish
+from Group_norm import GroupBatchnorm2d
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch Example')
@@ -30,7 +31,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+parser.add_argument('--log-interval', type=int, default=10000, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--wn', type=str, default="window name", metavar='WN',
                     help='name this processing')
@@ -58,23 +59,15 @@ test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.test_batc
                                           shuffle=True, **kwargs)
 
 def Norm_op(num):
-    return nn.BatchNorm2d(num)
+    #return nn.BatchNorm2d(num)
+    #return nn.InstanceNorm2d(num)
+    return GroupBatchnorm2d(num)
 
-'''
 def Act_op():
     return nn.ReLU()
     #return nn.Tanh()
-'''
+    #return Swish()
 
-## 由于 Function 可能需要暂存 input tensor。
-## 因此，建议不复用 Function 对象，以避免遇到内存提前释放的问题。
-class Act_op(nn.Module):
-    def __init__(self):
-        super(Act_op, self).__init__()
-
-    def forward(self, x):
-        x = x * F.sigmoid(x)
-        return x
 
 class Net(nn.Module):
     def __init__(self):
@@ -109,7 +102,8 @@ class Net(nn.Module):
         ) #(8,8) -> (4,4)
         self.fc_layer = nn.Sequential(
            nn.Linear(4*4*128, 500),
-           Norm_op(500),
+           #Norm_op(500),
+           #nn.BatchNorm2d(500),
            Act_op(),
            nn.Linear(500,10)
         )
@@ -187,6 +181,6 @@ for epoch in range(1, args.epochs + 1):
     test()
 
 #保存loss值，在其他函数中，把不同过程的loss值画在一个图里
-train_loss_file_name = 'train_loss_'+args.wn+'.txt'
+train_loss_file_name = 'train_loss_'+args.wn+'_bs_'+str(args.batch_size)+'.txt'
 with open(train_loss_file_name, 'wb') as f:
     pickle.dump(train_loss,f)

@@ -4,6 +4,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class Swish(nn.Module):
+    def __init__(self):
+        super(Act_op, self).__init__()
+
+    def forward(self, x):
+        x = x * F.sigmoid(x)
+        return x
+
+'''
 ## 由于 Function 可能需要暂存 input tensor。
 ## 因此，建议不复用 Function 对象，以避免遇到内存提前释放的问题。
 class Swish_act(torch.autograd.Function):
@@ -26,3 +35,4 @@ class Swish_act(torch.autograd.Function):
         grad_swish = output + F.sigmoid(input_) * (1 - output)
         print('swish act op backward')
         return grad_output * grad_swish
+'''
