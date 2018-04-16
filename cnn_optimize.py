@@ -31,7 +31,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10000, metavar='N',
+parser.add_argument('--log-interval', type=int, default=1000, metavar='N',
                     help='how many batches to wait before logging training status')
 parser.add_argument('--wn', type=str, default="window name", metavar='WN',
                     help='name this processing')
@@ -48,7 +48,7 @@ if args.cuda:
 transforms = transforms.Compose([transforms.ToTensor(),
                                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),])
 
-kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
+kwargs = {'num_workers': 2, 'pin_memory': True} if args.cuda else {}
 
 train_dataset = datasets.CIFAR10('./data', train=True, download=False, transform=transforms)
 train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=args.batch_size, 
@@ -60,13 +60,13 @@ test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.test_batc
 
 def Norm_op(num):
     return nn.BatchNorm2d(num)
-	#return nn.InstanceNorm2d(num)
-	#return GroupBatchnorm2d(num)
+    #return nn.InstanceNorm2d(num)
+    #return GroupBatchnorm2d(num)
 
 def Act_op():
     return nn.ReLU()
     #return nn.Tanh()
-	#return Swish()
+    #return Swish()
 
 
 class Net(nn.Module):
@@ -100,11 +100,29 @@ class Net(nn.Module):
            Act_op(),
            nn.MaxPool2d(2)
         ) #(8,8) -> (4,4)
-        self.fc_layer = nn.Sequential(
-           nn.Linear(4*4*128, 500),
-           #Norm_op(500),
-           #nn.BatchNorm2d(500),
+        self.con_layer4 = nn.Sequential(
+           nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1),
+           Norm_op(256),
            Act_op(),
+           nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+           Norm_op(256),
+           Act_op(),
+           nn.MaxPool2d(2)
+        ) #(4,4) -> (2,2)
+        self.con_layer5 = nn.Sequential(
+           nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1),
+           Norm_op(512),
+           Act_op(),
+           nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1),
+           Norm_op(512),
+           Act_op(),
+           nn.MaxPool2d(2)
+        ) #(2,2) -> (1,1)
+        self.fc_layer = nn.Sequential(
+           nn.Linear(2*2*256, 500),
+           Norm_op(500),
+           Act_op(),
+           nn.Dropout2d(p=0.5),
            nn.Linear(500,10)
         )
 
@@ -112,16 +130,20 @@ class Net(nn.Module):
         x = self.con_layer1(x)
         x = self.con_layer2(x)
         x = self.con_layer3(x)
+        x = self.con_layer4(x)
         x = x.view(x.size(0),-1)
         x = self.fc_layer(x)
-        return x #F.log_softmax(x, dim=1)
+        return F.log_softmax(x, dim=1)
 
 model = Net()
 if args.cuda:
     model.cuda()
 
-loss_f = nn.CrossEntropyLoss() #F.nll_loss()
+loss_f = nn.CrossEntropyLoss()  # F.nll_loss
 optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+#optimizer = optim.Adam(model.parameters(), lr=0.01, betas=(0.9, 0.999))  ##在这个网络里，SGD的效果优于Adam
+#每经过step_size次epoch,学习率更新为lr*gamma
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
 vis = visdom.Visdom()
 startup_sec = 1
@@ -158,7 +180,7 @@ def train(epoch):
 
 
 def test():
-    model.eval()
+    model.eval()  ### 把module设置为预测模式，对Dropout和BatchNorm模块有影响
     test_loss = 0
     correct = 0
     for data, target in test_loader:
@@ -177,12 +199,15 @@ def test():
 
 
 for epoch in range(1, args.epochs + 1):
+    scheduler.step()
     train(epoch)
     test()
+
+torch.save(model, 'model_bs_'+str(args.batch_size)+'.pkl')	
 
 #保存loss值，在其他函数中，把不同过程的loss值画在一个图里
 train_loss_file_name = 'train_loss_'+args.wn+'_bs_'+str(args.batch_size)+'.txt'
 with open(train_loss_file_name, 'wb') as f:
     pickle.dump(train_loss,f)
 
-##测试集结果为80%。cnn_optimize.py为优化后的版本。
+##测试集结果为85%，还需要优化
