@@ -58,15 +58,18 @@ test_dataset = datasets.CIFAR10('./data', train=False, transform=transforms)
 test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.test_batch_size, 
                                           shuffle=True, **kwargs)
 
+group_num = 16
 def Norm_op(num):
     return nn.BatchNorm2d(num)
-	#return nn.InstanceNorm2d(num)
-	#return GroupBatchnorm2d(num)
+    #return nn.InstanceNorm2d(num)
+    #return GroupBatchnorm2d(num)
+    #return nn.GroupNorm(group_num, num)
+	#return nn.LayerNorm(num)
 
 def Act_op():
     return nn.ReLU()
     #return nn.Tanh()
-	#return Swish()
+    #return Swish()
 
 
 class Net(nn.Module):
@@ -180,9 +183,9 @@ for epoch in range(1, args.epochs + 1):
     train(epoch)
     test()
 
+torch.save(model, 'model_bs_'+str(args.batch_size)+'.pkl')	
+
 #保存loss值，在其他函数中，把不同过程的loss值画在一个图里
 train_loss_file_name = 'train_loss_'+args.wn+'_bs_'+str(args.batch_size)+'.txt'
 with open(train_loss_file_name, 'wb') as f:
     pickle.dump(train_loss,f)
-
-##测试集结果为80%。cnn_optimize.py为优化后的版本。

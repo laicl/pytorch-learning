@@ -28,6 +28,3 @@ pip install --upgrade visdom
 --lr  对应learning rate学习率
 
 注： 查看conda环境命令为conda info -e
-3. 运行结束后，会生成txt文件，保存训练过程中变化的loss值。
-可以使用draw_loss.py，把多个txt文件里保存的loss值画到一张图上。
-python draw_loss.py
